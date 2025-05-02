@@ -1,0 +1,117 @@
+= Get stock prices
+
+Скрипты на `bash` для получения цен биржевых активов с помощью https://developer.tbank.ru/invest/intro/intro[API Т-Банка]
+
+== Как запустить
+
+. Получите https://developer.tbank.ru/invest/intro/intro/token[токен]
+. Задайте токен в файле `run.sh`
+. В файле `tickers.csv` задайте список активов, для которых необходимо получить цены.
+Заголовок файла обязательный, первая колонка -- опциональная -- ISIN, его можно не заполнять, он необходим, если в API Т-Банка находятся несколько инструментов по одному тикеру.
+Вторая колонка - тикер (например, `SBGB`, `EQMX`), третья -- тип актива, смотрите полный список типов активов https://developer.tbank.ru/invest/api/instruments-service-find-instrument[здесь].
+Можно также отталкиваться от файла `tickers.csv` в качестве примера
+. Запустить скрипт -- `run.sh`
+
+== Пример
+
+Содержимое файла `tickers.csv`:
+
+.tickers.csv
+[source,csv]
+----
+ISIN,Ticker,Type
+RU000A101NZ2,GOLD,INSTRUMENT_TYPE_ETF
+,EQMX,INSTRUMENT_TYPE_ETF
+,USD,INSTRUMENT_TYPE_CURRENCY
+,FXRL,INSTRUMENT_TYPE_ETF
+----
+
+Запуск:
+
+[source,bash]
+----
+$ ./run.sh
+----
+
+Вывод:
+
+[source,text]
+----
+EQMX,137.850000000
+FXRL,29.050000000
+GOLD,2.187000000
+USD,81.493300000
+----
+
+== Возможные ошибки
+
+=== Authentication token is missing or invalid
+
+Полный текст ошибки:
+
+[source,text]
+----
+curl: (22) The requested URL returned error: 401
+Got error response from API: {"code":16,"message":"Authentication token is missing or invalid","description":"40003"}
+----
+
+Проблема -- неверно задан или отсутствует токен.
+
+Убедитесь, что у вас задан токен в `run.sh`, он должен выглядеть примерно так:
+
+[source,bash]
+----
+export TOKEN="Bearer <строка-из-символов>"
+----
+
+Если это не помогает, убедитесь в том, что токен валидный и у него не истек срок действия.
+
+=== Error: Expected exactly one search result for <TICKER> <TYPE>, see raw response above...
+
+Эта ошибка говорит о том, что для данного актива недостаточно указать просто тикер, необходимо знать ISIN.
+Скрипт сперва ищет идентификаторы для каждого из инструментов с помощью метода https://russianinvestments.github.io/investAPI/swagger-ui/#/InstrumentsService/InstrumentsService_FindInstrument[`FindInstrument`], а затем использует полученные идентификаторы, чтобы получить последние цены покупки-продажи.
+Ошибка возникает из-за того, что в результатах поиска оказалось более одного инструмента и необходимо явно выбрать ISIN для него и указать в `tickers.csv`.
+
+Например, для такого `tickers.csv`:
+
+[source,csv]
+----
+ISIN,Ticker,Type
+,GOLD,INSTRUMENT_TYPE_ETF
+----
+
+скрипт выведет ошибку:
+
+.tickers.csv
+[source,text]
+----
+Response: '{
+  "instruments": [
+  // часть полученных инструментов опущена
+  {
+    "isin": "RU000A101NZ2",
+    "name": "ВИМ Фонд Золото"
+    // Нерелевантные поля опущены для краткости
+  }]
+}'
+Error: Expected exactly one search result for 'GOLD' (INSTRUMENT_TYPE_ETF), see raw response above, and pick ISIN for the ticker explicitly.
+Your tickers.csv should contain ISIN, like this:
+
+ISIN,Ticker,Type
+YOUR_ISIN,YOUR_TICKER,YOUR_TYPE
+
+Instead of this:
+
+ISIN,Ticker,Type
+,YOUR_TICKER,YOUR_TYPE
+----
+
+Чтобы исправить ошибку, найдите в ответе необходимый Вам инструмент (в моём случае это -- ВИМ Фонд Золото), скопируйте ISIN и добавьте его в `tickers.csv` к строке, отвечающей за тикер инструмента, где Вы получили ошибку.
+В моём случае `tickers.csv` выглядит так:
+
+.tickers.csv
+[source,text]
+----
+ISIN,Ticker,Type
+RU000A101NZ2,GOLD,INSTRUMENT_TYPE_ETF
+----
